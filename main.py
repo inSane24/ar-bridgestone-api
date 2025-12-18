@@ -8,6 +8,9 @@ import os
 from pathlib import Path
 import threading
 from typing import Iterable, List, Dict, Any
+import socket
+import sys
+from contextlib import contextmanager
 
 import cv2
 import numpy as np
@@ -16,10 +19,31 @@ from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 import uvicorn
 
 
+@contextmanager
+def _suppress_stdout_stderr() -> Iterable[None]:
+    """Temporarily silence stdout/stderr (for noisy OCR init)."""
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    try:
+        with open(os.devnull, "w", encoding="utf-8") as devnull:
+            sys.stdout = devnull
+            sys.stderr = devnull
+            yield
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
+def _env_bool(key: str, default: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
 def _init_ocr() -> ONNXPaddleOcr:
     """Create a single OCR instance to reuse across requests."""
     try:
-        return ONNXPaddleOcr(use_gpu=False, lang="english")
+        use_gpu = _env_bool("USE_GPU", True)
+        with _suppress_stdout_stderr():
+            return ONNXPaddleOcr(use_gpu=use_gpu, lang="english")
     except Exception as exc:  # pragma: no cover - only runs at startup
         raise RuntimeError("Failed to initialize ONNXPaddleOcr") from exc
 
@@ -66,6 +90,21 @@ def run_ocr_from_bytes(image_bytes: bytes) -> List[Dict[str, Any]]:
         raw = ocr.ocr(img)
     return _format_results(raw)
 
+
+def _preferred_hostname() -> str:
+    """Return the hostname we recommend for accessing FastAPI."""
+    host_name = socket.gethostname().strip()
+    if not host_name:
+        return "localhost"
+    return host_name
+
+
+def _print_access_tips(port: int) -> None:
+    host_name = _preferred_hostname()
+    print(f"アクセス用ホスト名: {host_name.split('.')[0]}")
+
+
+
 @app.get("/")
 def root() -> Dict[str, str]:
     return {"service": "onnx-ocr-api", "docs": "/docs", "healthz": "/healthz"}
@@ -105,4 +144,16 @@ def sample(image_path: Path = Path("sample.png")) -> None:
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host=host, port=port, reload=True)
+    reload_enabled = _env_bool("RELOAD", False)
+    log_level = os.getenv("LOG_LEVEL", "warning")
+    if host == "0.0.0.0":
+        _print_access_tips(port)
+    else:
+        print(f"FastAPI を http://{host}:{port} で待ち受けます。")
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=reload_enabled,
+        log_level=log_level,
+    )

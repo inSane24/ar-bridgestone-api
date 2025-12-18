@@ -8,6 +8,8 @@
 python main.py
 ```
 
+- GPUが利用できる環境ではデフォルトでGPUを使用します。CPUで実行したい場合は `USE_GPU=0 python main.py` としてください。
+
 ## 使い方（例）
 
 ```bash
@@ -29,7 +31,14 @@ curl -X POST http://localhost:8000/ocr \
 }
 ```
 
-## 運用メモ
+## Windows 側ネットワーク設定の自動化
 
-- `--host 0.0.0.0` は同一ネットワークからアクセス可能になります（必要な範囲に限定・FW設定推奨）。
-- 初回起動時にモデルの準備で時間がかかる場合があります。
+WSL の IP は再起動などで変わるため、以下の PowerShell スクリプトで **IP 確認 → PortProxy 設定 → Firewall 開放** をまとめて実行できます。
+
+```powershell
+# 管理者 PowerShell / コマンドプロンプトで
+cd <このリポジトリ>
+.\setup-portproxy.bat
+```
+
+- 初回実行時にファイアウォールルールを作成し、2回目以降は再利用します。
