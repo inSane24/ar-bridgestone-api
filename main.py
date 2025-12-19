@@ -168,22 +168,13 @@ def _preferred_ip() -> str:
 
 
 def _print_access_tips(port: int) -> None:
-    ip_address = _preferred_ip()
-    print(f"アクセス用IPアドレス: {ip_address}")
-    print(f"アクセス例: http://{ip_address}:{port}/ocr")
+    ip_address: Optional[str] = None
     if _is_wsl():
-        windows_ip = _windows_host_ip()
-        print("\nWSL環境で起動しています。上記のIPはWSL内部向けです。")
-        if windows_ip:
-            print(
-                "他PCからアクセスする場合は Windows 側のIP: http://%s:%s または "
-                "setup-portproxy で作成したホスト名を使用してください." % (windows_ip, port)
-            )
-        else:
-            print(
-                "他PCからアクセスする場合は setup-portproxy.ps1 を実行し、"
-                "Windows の実IPアドレスを案内に従って利用してください."
-            )
+        ip_address = _windows_host_ip()
+    if not ip_address:
+        ip_address = _preferred_ip()
+    print(f"アクセス用IPアドレス: {ip_address}")
+    print(f"http://{ip_address}:{port}/ocr")
 
 
 
