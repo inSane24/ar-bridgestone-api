@@ -101,7 +101,8 @@ def _preferred_hostname() -> str:
 
 def _print_access_tips(port: int) -> None:
     host_name = _preferred_hostname()
-    print(f"アクセス用ホスト名: {host_name.split('.')[0]}")
+    print(f"アクセス用ホスト名: {host_name}")
+    print(f"アクセス例: http://{host_name}:{port}/ocr")
 
 
 
