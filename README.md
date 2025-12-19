@@ -31,14 +31,31 @@ curl -X POST http://localhost:8000/ocr \
 }
 ```
 
-## Windows 側ネットワーク設定の自動化
+## Windows（WSL2）環境でのネットワーク設定（推奨）
 
-WSL の IP は再起動などで変わるため、以下の PowerShell スクリプトで **IP 確認 → PortProxy 設定 → Firewall 開放** をまとめて実行できます。
+この API を **WSL2 上で起動する場合**、WSL の IP アドレスは再起動のたびに変わります。  
+同じネットワーク上の別 PC から API を利用できるようにするため、付属の PowerShell スクリプトを使って  
+**portproxy の設定** と **Windows Firewall の開放** を自動化します。
 
-```powershell
-# 管理者 PowerShell / コマンドプロンプトで
-cd <このリポジトリ>
-.\setup-portproxy.bat
-```
+### 使い方
 
-- 初回実行時にファイアウォールルールを作成し、2回目以降は再利用します。
+1. Windows 側で **右クリック →「管理者として実行」** します。
+   ```
+   cd C:\tools
+   powershell -ExecutionPolicy Bypass -File .\setup-portproxy.ps1 -Port 8000
+   ```
+
+2. WSL 上で API サーバーを起動します。
+
+   ```bash
+   python main.py
+   ```
+
+3. 同じネットワーク上の別 PC / 端末から以下にアクセスします。
+
+   ```
+   http://<Windows の IP アドレス>:8000/docs
+   ```
+
+- ファイアウォールルールは **初回実行時のみ作成** され、2回目以降は再利用されます。
+- WSL を再起動した場合は、このスクリプトを再度実行してください。

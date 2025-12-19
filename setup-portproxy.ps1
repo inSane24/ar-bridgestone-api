@@ -27,7 +27,7 @@ function Assert-IsAdministrator {
     $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw "このスクリプトは管理者 PowerShell から実行してください。"
+        throw "Please run this script from an elevated (Administrator) PowerShell session."
     }
 }
 
@@ -37,7 +37,7 @@ function Get-WindowsIpv4 {
         Select-Object -First 1
 
     if (-not $defaultRoute) {
-        throw "Windows の有効なネットワーク経路を特定できませんでした。"
+        throw "Unable to determine an active Windows network route."
     }
 
     $ipConfig = Get-NetIPAddress -InterfaceIndex $defaultRoute.InterfaceIndex -AddressFamily IPv4 |
@@ -45,7 +45,7 @@ function Get-WindowsIpv4 {
         Select-Object -First 1
 
     if (-not $ipConfig) {
-        throw "Windows 側の IPv4 アドレスを取得できませんでした。"
+        throw "Unable to obtain the Windows IPv4 address."
     }
 
     return $ipConfig.IPAddress
@@ -54,7 +54,7 @@ function Get-WindowsIpv4 {
 function Get-WslIpv4 {
     $output = wsl hostname -I 2>$null
     if (-not $output) {
-        throw "WSL から IPv4 を取得できませんでした。`wsl` コマンドが実行できるか確認してください。"
+        throw "Unable to obtain an IPv4 address from WSL. Please ensure the 'wsl' command is available."
     }
 
     $ip = $output.Trim().Split(" ", [System.StringSplitOptions]::RemoveEmptyEntries) |
@@ -62,7 +62,7 @@ function Get-WslIpv4 {
         Select-Object -First 1
 
     if (-not $ip) {
-        throw "WSL の IPv4 アドレスを判別できませんでした。`hostname -I` の結果: $output"
+        throw "Unable to determine the WSL IPv4 address. Output of 'hostname -I': $output"
     }
 
     return $ip
@@ -75,7 +75,7 @@ function Ensure-PortProxy {
         [int]$ConnectPort
     )
 
-    Write-Host "PortProxy を設定中... (0.0.0.0:$ListenPort -> $ConnectAddress:$ConnectPort)"
+    Write-Host ("Configuring portproxy... (0.0.0.0:{0} -> {1}:{2})" -f $ListenPort, $ConnectAddress, $ConnectPort)
     netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$ListenPort 2>$null | Out-Null
     netsh interface portproxy add v4tov4 `
         listenaddress=0.0.0.0 listenport=$ListenPort `
@@ -90,11 +90,11 @@ function Ensure-FirewallRule {
 
     $rule = Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue
     if ($rule) {
-        Write-Host "既存のファイアウォールルール '$DisplayName' を使用します。"
+        Write-Host "Using existing firewall rule '$DisplayName'."
         return
     }
 
-    Write-Host "ファイアウォールルール '$DisplayName' を新規作成します。"
+    Write-Host "Creating firewall rule '$DisplayName'."
     New-NetFirewallRule `
         -DisplayName $DisplayName `
         -Direction Inbound `
@@ -111,18 +111,18 @@ try {
     $windowsIp = Get-WindowsIpv4
     $wslIp = Get-WslIpv4
 
-    Write-Host "Windows 側 IP : $windowsIp"
-    Write-Host "WSL 側 IP     : $wslIp"
+    Write-Host "Windows IPv4 : $windowsIp"
+    Write-Host "WSL IPv4     : $wslIp"
 
     Ensure-PortProxy -ListenPort $Port -ConnectAddress $wslIp -ConnectPort $Port
     Ensure-FirewallRule -DisplayName $RuleName -LocalPort $Port
 
     Write-Host ""
-    Write-Host "現在の portproxy:"
+    Write-Host "Current portproxy configuration:"
     netsh interface portproxy show all
 
     Write-Host ""
-    Write-Host "セットアップ完了。FastAPI を WSL で起動したら http://$windowsIp:$Port でアクセスできます。"
+    Write-Host ("Setup complete. Start FastAPI in WSL and access it at http://{0}:{1}" -f $windowsIp, $Port)
 }
 catch {
     Write-Error $_
