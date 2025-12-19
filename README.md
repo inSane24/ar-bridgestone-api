@@ -37,6 +37,10 @@ curl -X POST http://localhost:8000/ocr \
 同じネットワーク上の別 PC から API を利用できるようにするため、付属の PowerShell スクリプトを使って  
 **portproxy の設定** と **Windows Firewall の開放** を自動化します。
 
+WSL のコンソールに表示される「アクセス用IPアドレス」は **WSL 内からアクセスするとき専用** です。  
+起動時には Windows 側の実 IP も一緒に表示されるので、他 PC からアクセスするときはその IP か
+`setup-portproxy.ps1` で作成した Windows ホスト名 (`<PC名>.local`) を利用してください。
+
 ### 使い方
 
 1. Windows 側で **右クリック →「管理者として実行」** します。

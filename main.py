@@ -7,8 +7,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import threading
-from typing import Iterable, List, Dict, Any
+from typing import Iterable, List, Dict, Any, Optional
 import socket
+import subprocess
 import sys
 from contextlib import contextmanager
 
@@ -91,6 +92,58 @@ def run_ocr_from_bytes(image_bytes: bytes) -> List[Dict[str, Any]]:
     return _format_results(raw)
 
 
+def _is_wsl() -> bool:
+    if os.getenv("WSL_DISTRO_NAME"):
+        return True
+    try:
+        with open("/proc/sys/kernel/osrelease", "r", encoding="utf-8") as fh:
+            return "microsoft" in fh.read().lower()
+    except OSError:
+        return False
+
+
+def _windows_host_ip() -> Optional[str]:
+    """Retrieve the Windows host LAN IP when running under WSL."""
+    try:
+        powershell_cmd = (
+            "$ErrorActionPreference='Stop';"
+            "$route=Get-NetRoute -DestinationPrefix '0.0.0.0/0' | "
+            "Sort-Object RouteMetric | Select-Object -First 1;"
+            "if($route){"
+            " $ip=Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 | "
+            "   Where-Object { $_.IPAddress -notmatch '^169\\.254\\.' } | Select-Object -First 1;"
+            " if($ip){[Console]::OutputEncoding=[Text.UTF8Encoding]::UTF8;$ip.IPAddress}"
+            "}"
+        )
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", powershell_cmd],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        completed = None
+
+    if completed and completed.stdout:
+        ip = completed.stdout.decode("utf-8", errors="ignore").strip()
+        if ip:
+            return ip
+
+    resolv_conf = Path("/etc/resolv.conf")
+    try:
+        for line in resolv_conf.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("nameserver"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    return parts[1]
+    except OSError:
+        pass
+    return None
+
+
 def _preferred_ip() -> str:
     """Return the IP address we recommend for accessing FastAPI."""
     try:
@@ -118,6 +171,19 @@ def _print_access_tips(port: int) -> None:
     ip_address = _preferred_ip()
     print(f"アクセス用IPアドレス: {ip_address}")
     print(f"アクセス例: http://{ip_address}:{port}/ocr")
+    if _is_wsl():
+        windows_ip = _windows_host_ip()
+        print("\nWSL環境で起動しています。上記のIPはWSL内部向けです。")
+        if windows_ip:
+            print(
+                "他PCからアクセスする場合は Windows 側のIP: http://%s:%s または "
+                "setup-portproxy で作成したホスト名を使用してください." % (windows_ip, port)
+            )
+        else:
+            print(
+                "他PCからアクセスする場合は setup-portproxy.ps1 を実行し、"
+                "Windows の実IPアドレスを案内に従って利用してください."
+            )
 
 
 
