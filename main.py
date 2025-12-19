@@ -91,18 +91,33 @@ def run_ocr_from_bytes(image_bytes: bytes) -> List[Dict[str, Any]]:
     return _format_results(raw)
 
 
-def _preferred_hostname() -> str:
-    """Return the hostname we recommend for accessing FastAPI."""
-    host_name = socket.gethostname().strip()
-    if not host_name:
-        return "localhost"
-    return host_name
+def _preferred_ip() -> str:
+    """Return the IP address we recommend for accessing FastAPI."""
+    try:
+        # UDP connect doesn't actually send traffic, but reveals the active interface.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+            if ip:
+                return ip
+    except OSError:
+        pass
+
+    host_name = socket.gethostname().strip() or "localhost"
+    try:
+        ip = socket.gethostbyname(host_name)
+        if ip:
+            return ip
+    except OSError:
+        pass
+
+    return "127.0.0.1"
 
 
 def _print_access_tips(port: int) -> None:
-    host_name = _preferred_hostname()
-    print(f"アクセス用ホスト名: {host_name}")
-    print(f"アクセス例: http://{host_name}:{port}/ocr")
+    ip_address = _preferred_ip()
+    print(f"アクセス用IPアドレス: {ip_address}")
+    print(f"アクセス例: http://{ip_address}:{port}/ocr")
 
 
 
